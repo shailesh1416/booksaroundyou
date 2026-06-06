@@ -19,6 +19,7 @@
 /frontend/yarn-debug.log
 /frontend/yarn-error.log
 /frontend/build
+/frontend/.env
 
 # IDEs
 .vscode
