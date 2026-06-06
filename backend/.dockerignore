@@ -1,0 +1,25 @@
+# Python artifacts
+**/__pycache__
+**/*.py[cod]
+**/*.pyo
+**/*.pyd
+*.sqlite3
+*.db
+
+# Virtual environment
+.venv/
+
+# Environment files
+.env
+.env.*
+
+# Flask instance folder
+instance/
+
+# Git
+.git
+
+# IDE files
+.vscode
+.idea
+.DS_Store
