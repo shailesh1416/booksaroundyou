@@ -50,9 +50,9 @@ jobs:
           docker push ${FRONTEND_URI}:${IMAGE_TAG}
           echo "FRONTEND_IMAGE=${FRONTEND_URI}:${IMAGE_TAG}" >> $GITHUB_ENV
 
-      - name: Register new ECS task definitions and update services
+     - name: Register new ECS task definitions and update services
         run: |
-          python3 <<'PY'
+          cat > deploy.py << 'EOF'
 import json, os, subprocess
 
 def clean_task_def(task_def):
@@ -119,4 +119,5 @@ for config in services:
         '--force-new-deployment'
     ])
     print(f"Service {config['service']} updated with task definition {new_task_def_arn}")
-PY
+EOF
+python3 deploy.py
