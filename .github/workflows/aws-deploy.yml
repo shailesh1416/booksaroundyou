@@ -5,20 +5,19 @@ on:
     branches: [ main ]
   workflow_dispatch:
 
-env:
-  AWS_REGION: ${{ secrets.AWS_REGION }}
-  AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
-  ECR_BACKEND_REPO: ${{ secrets.ECR_BACKEND_REPO }}
-  ECR_FRONTEND_REPO: ${{ secrets.ECR_FRONTEND_REPO }}
-  ECS_CLUSTER: ${{ secrets.ECS_CLUSTER }}
-  ECS_SERVICE_BACKEND: ${{ secrets.ECS_SERVICE_BACKEND }}
-  ECS_SERVICE_FRONTEND: ${{ secrets.ECS_SERVICE_FRONTEND }}
-  BACKEND_CONTAINER_NAME: ${{ secrets.BACKEND_CONTAINER_NAME }}
-  FRONTEND_CONTAINER_NAME: ${{ secrets.FRONTEND_CONTAINER_NAME }}
-
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    env:
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+      ECR_BACKEND_REPO: ${{ secrets.ECR_BACKEND_REPO }}
+      ECR_FRONTEND_REPO: ${{ secrets.ECR_FRONTEND_REPO }}
+      ECS_CLUSTER: ${{ secrets.ECS_CLUSTER }}
+      ECS_SERVICE_BACKEND: ${{ secrets.ECS_SERVICE_BACKEND }}
+      ECS_SERVICE_FRONTEND: ${{ secrets.ECS_SERVICE_FRONTEND }}
+      BACKEND_CONTAINER_NAME: ${{ secrets.BACKEND_CONTAINER_NAME }}
+      FRONTEND_CONTAINER_NAME: ${{ secrets.FRONTEND_CONTAINER_NAME }}
 
     steps:
       - name: Checkout repository
@@ -50,7 +49,7 @@ jobs:
           docker push ${FRONTEND_URI}:${IMAGE_TAG}
           echo "FRONTEND_IMAGE=${FRONTEND_URI}:${IMAGE_TAG}" >> $GITHUB_ENV
 
-     - name: Register new ECS task definitions and update services
+      - name: Register new ECS task definitions and update services
         run: |
           cat > deploy.py << 'EOF'
 import json, os, subprocess
