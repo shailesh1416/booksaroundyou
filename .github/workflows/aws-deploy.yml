@@ -50,8 +50,8 @@ jobs:
           echo "FRONTEND_IMAGE=${FRONTEND_URI}:${IMAGE_TAG}" >> $GITHUB_ENV
 
       - name: Register new ECS task definitions and update services
-        run: |
-          cat > deploy.py << 'EOF'
+       run: |
+          python3 - << 'PYEOF'
 import json, os, subprocess
 
 def clean_task_def(task_def):
@@ -118,5 +118,4 @@ for config in services:
         '--force-new-deployment'
     ])
     print(f"Service {config['service']} updated with task definition {new_task_def_arn}")
-EOF
-python3 deploy.py
+PYEOF
