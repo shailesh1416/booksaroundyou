@@ -51,71 +51,71 @@ jobs:
 
       - name: Register new ECS task definitions and update services
         run: |
-          python3 - << 'PYEOF'
-import json, os, subprocess
+          python3 <<'PYEOF'
+          import json, os, subprocess
 
-def clean_task_def(task_def):
-    for key in [
-        'status', 'revision', 'requiresAttributes', 'compatibilities', 'registeredAt', 'registeredBy',
-        'taskDefinitionArn', 'pendingCount', 'activeCount'
-    ]:
-        task_def.pop(key, None)
-    return task_def
+          def clean_task_def(task_def):
+              for key in [
+                  'status', 'revision', 'requiresAttributes', 'compatibilities', 'registeredAt', 'registeredBy',
+                  'taskDefinitionArn', 'pendingCount', 'activeCount'
+              ]:
+                  task_def.pop(key, None)
+              return task_def
 
-cluster = os.environ['ECS_CLUSTER']
-services = [
-    {
-        'name': 'backend',
-        'service': os.environ['ECS_SERVICE_BACKEND'],
-        'container_name': os.environ['BACKEND_CONTAINER_NAME'],
-        'image': os.environ['BACKEND_IMAGE'],
-    },
-    {
-        'name': 'frontend',
-        'service': os.environ['ECS_SERVICE_FRONTEND'],
-        'container_name': os.environ['FRONTEND_CONTAINER_NAME'],
-        'image': os.environ['FRONTEND_IMAGE'],
-    },
-]
+          cluster = os.environ['ECS_CLUSTER']
+          services = [
+              {
+                  'name': 'backend',
+                  'service': os.environ['ECS_SERVICE_BACKEND'],
+                  'container_name': os.environ['BACKEND_CONTAINER_NAME'],
+                  'image': os.environ['BACKEND_IMAGE'],
+              },
+              {
+                  'name': 'frontend',
+                  'service': os.environ['ECS_SERVICE_FRONTEND'],
+                  'container_name': os.environ['FRONTEND_CONTAINER_NAME'],
+                  'image': os.environ['FRONTEND_IMAGE'],
+              },
+          ]
 
-for config in services:
-    print(f"Updating ECS service {config['service']} ({config['name']})")
-    task_def_arn = subprocess.check_output([
-        'aws', 'ecs', 'describe-services',
-        '--cluster', cluster,
-        '--services', config['service'],
-        '--query', 'services[0].taskDefinition',
-        '--output', 'text'
-    ], text=True).strip()
+          for config in services:
+              print(f"Updating ECS service {config['service']} ({config['name']})")
+              task_def_arn = subprocess.check_output([
+                  'aws', 'ecs', 'describe-services',
+                  '--cluster', cluster,
+                  '--services', config['service'],
+                  '--query', 'services[0].taskDefinition',
+                  '--output', 'text'
+              ], text=True).strip()
 
-    task_def = json.loads(subprocess.check_output([
-        'aws', 'ecs', 'describe-task-definition',
-        '--task-definition', task_def_arn,
-        '--query', 'taskDefinition',
-        '--output', 'json'
-    ], text=True))
+              task_def = json.loads(subprocess.check_output([
+                  'aws', 'ecs', 'describe-task-definition',
+                  '--task-definition', task_def_arn,
+                  '--query', 'taskDefinition',
+                  '--output', 'json'
+              ], text=True))
 
-    task_def = clean_task_def(task_def)
-    for container in task_def.get('containerDefinitions', []):
-        if container.get('name') == config['container_name']:
-            container['image'] = config['image']
+              task_def = clean_task_def(task_def)
+              for container in task_def.get('containerDefinitions', []):
+                  if container.get('name') == config['container_name']:
+                      container['image'] = config['image']
 
-    filename = f"new-{config['name']}-taskdef.json"
-    with open(filename, 'w') as f:
-        json.dump(task_def, f)
+              filename = f"new-{config['name']}-taskdef.json"
+              with open(filename, 'w') as f:
+                  json.dump(task_def, f)
 
-    result = subprocess.check_output([
-        'aws', 'ecs', 'register-task-definition',
-        '--cli-input-json', f'file://{filename}'
-    ], text=True)
-    new_task_def_arn = json.loads(result)['taskDefinition']['taskDefinitionArn']
+              result = subprocess.check_output([
+                  'aws', 'ecs', 'register-task-definition',
+                  '--cli-input-json', f'file://{filename}'
+              ], text=True)
+              new_task_def_arn = json.loads(result)['taskDefinition']['taskDefinitionArn']
 
-    subprocess.check_call([
-        'aws', 'ecs', 'update-service',
-        '--cluster', cluster,
-        '--service', config['service'],
-        '--task-definition', new_task_def_arn,
-        '--force-new-deployment'
-    ])
-    print(f"Service {config['service']} updated with task definition {new_task_def_arn}")
-PYEOF
+              subprocess.check_call([
+                  'aws', 'ecs', 'update-service',
+                  '--cluster', cluster,
+                  '--service', config['service'],
+                  '--task-definition', new_task_def_arn,
+                  '--force-new-deployment'
+              ])
+              print(f"Service {config['service']} updated with task definition {new_task_def_arn}")
+          PYEOF
