@@ -1,0 +1,122 @@
+name: AWS Deploy
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+env:
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+  AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+  ECR_BACKEND_REPO: ${{ secrets.ECR_BACKEND_REPO }}
+  ECR_FRONTEND_REPO: ${{ secrets.ECR_FRONTEND_REPO }}
+  ECS_CLUSTER: ${{ secrets.ECS_CLUSTER }}
+  ECS_SERVICE_BACKEND: ${{ secrets.ECS_SERVICE_BACKEND }}
+  ECS_SERVICE_FRONTEND: ${{ secrets.ECS_SERVICE_FRONTEND }}
+  BACKEND_CONTAINER_NAME: ${{ secrets.BACKEND_CONTAINER_NAME }}
+  FRONTEND_CONTAINER_NAME: ${{ secrets.FRONTEND_CONTAINER_NAME }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to AWS ECR
+        uses: aws-actions/amazon-ecr-login@v1
+
+      - name: Build and push backend Docker image
+        run: |
+          IMAGE_TAG=${GITHUB_SHA::8}
+          BACKEND_URI=${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_BACKEND_REPO}
+          docker build -t ${BACKEND_URI}:${IMAGE_TAG} backend
+          docker push ${BACKEND_URI}:${IMAGE_TAG}
+          echo "BACKEND_IMAGE=${BACKEND_URI}:${IMAGE_TAG}" >> $GITHUB_ENV
+
+      - name: Build and push frontend Docker image
+        run: |
+          IMAGE_TAG=${GITHUB_SHA::8}
+          FRONTEND_URI=${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_FRONTEND_REPO}
+          docker build -t ${FRONTEND_URI}:${IMAGE_TAG} frontend
+          docker push ${FRONTEND_URI}:${IMAGE_TAG}
+          echo "FRONTEND_IMAGE=${FRONTEND_URI}:${IMAGE_TAG}" >> $GITHUB_ENV
+
+      - name: Register new ECS task definitions and update services
+        run: |
+          python3 <<'PY'
+import json, os, subprocess
+
+def clean_task_def(task_def):
+    for key in [
+        'status', 'revision', 'requiresAttributes', 'compatibilities',
+        'requiresCompatibilities', 'registeredAt', 'registeredBy',
+        'taskDefinitionArn', 'pendingCount', 'activeCount'
+    ]:
+        task_def.pop(key, None)
+    return task_def
+
+cluster = os.environ['ECS_CLUSTER']
+services = [
+    {
+        'name': 'backend',
+        'service': os.environ['ECS_SERVICE_BACKEND'],
+        'container_name': os.environ['BACKEND_CONTAINER_NAME'],
+        'image': os.environ['BACKEND_IMAGE'],
+    },
+    {
+        'name': 'frontend',
+        'service': os.environ['ECS_SERVICE_FRONTEND'],
+        'container_name': os.environ['FRONTEND_CONTAINER_NAME'],
+        'image': os.environ['FRONTEND_IMAGE'],
+    },
+]
+
+for config in services:
+    print(f"Updating ECS service {config['service']} ({config['name']})")
+    task_def_arn = subprocess.check_output([
+        'aws', 'ecs', 'describe-services',
+        '--cluster', cluster,
+        '--services', config['service'],
+        '--query', 'services[0].taskDefinition',
+        '--output', 'text'
+    ], text=True).strip()
+
+    task_def = json.loads(subprocess.check_output([
+        'aws', 'ecs', 'describe-task-definition',
+        '--task-definition', task_def_arn,
+        '--query', 'taskDefinition',
+        '--output', 'json'
+    ], text=True))
+
+    task_def = clean_task_def(task_def)
+    for container in task_def.get('containerDefinitions', []):
+        if container.get('name') == config['container_name']:
+            container['image'] = config['image']
+
+    filename = f"new-{config['name']}-taskdef.json"
+    with open(filename, 'w') as f:
+        json.dump(task_def, f)
+
+    result = subprocess.check_output([
+        'aws', 'ecs', 'register-task-definition',
+        '--cli-input-json', f'file://{filename}'
+    ], text=True)
+    new_task_def_arn = json.loads(result)['taskDefinition']['taskDefinitionArn']
+
+    subprocess.check_call([
+        'aws', 'ecs', 'update-service',
+        '--cluster', cluster,
+        '--service', config['service'],
+        '--task-definition', new_task_def_arn
+    ])
+    print(f"Service {config['service']} updated with task definition {new_task_def_arn}")
+PY
