@@ -5,19 +5,20 @@ on:
     branches: [ main ]
   workflow_dispatch:
 
+env:
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+  AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+  ECR_BACKEND_REPO: ${{ secrets.ECR_BACKEND_REPO }}
+  ECR_FRONTEND_REPO: ${{ secrets.ECR_FRONTEND_REPO }}
+  ECS_CLUSTER: ${{ secrets.ECS_CLUSTER }}
+  ECS_SERVICE_BACKEND: ${{ secrets.ECS_SERVICE_BACKEND }}
+  ECS_SERVICE_FRONTEND: ${{ secrets.ECS_SERVICE_FRONTEND }}
+  BACKEND_CONTAINER_NAME: ${{ secrets.BACKEND_CONTAINER_NAME }}
+  FRONTEND_CONTAINER_NAME: ${{ secrets.FRONTEND_CONTAINER_NAME }}
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    env:
-      AWS_REGION: ${{ secrets.AWS_REGION }}
-      AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
-      ECR_BACKEND_REPO: ${{ secrets.ECR_BACKEND_REPO }}
-      ECR_FRONTEND_REPO: ${{ secrets.ECR_FRONTEND_REPO }}
-      ECS_CLUSTER: ${{ secrets.ECS_CLUSTER }}
-      ECS_SERVICE_BACKEND: ${{ secrets.ECS_SERVICE_BACKEND }}
-      ECS_SERVICE_FRONTEND: ${{ secrets.ECS_SERVICE_FRONTEND }}
-      BACKEND_CONTAINER_NAME: ${{ secrets.BACKEND_CONTAINER_NAME }}
-      FRONTEND_CONTAINER_NAME: ${{ secrets.FRONTEND_CONTAINER_NAME }}
 
     steps:
       - name: Checkout repository
@@ -35,36 +36,28 @@ jobs:
 
       - name: Build and push backend Docker image
         run: |
-          IMAGE_TAG="${GITHUB_SHA:0:8}"
-          BACKEND_URI="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_BACKEND_REPO}"
-          docker build -t "${BACKEND_URI}:${IMAGE_TAG}" backend
-          docker push "${BACKEND_URI}:${IMAGE_TAG}"
-          echo "BACKEND_IMAGE=${BACKEND_URI}:${IMAGE_TAG}" >> "$GITHUB_ENV"
+          IMAGE_TAG=${GITHUB_SHA:0:8}
+          BACKEND_URI=${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_BACKEND_REPO}
+          docker build -t ${BACKEND_URI}:${IMAGE_TAG} backend
+          docker push ${BACKEND_URI}:${IMAGE_TAG}
+          echo "BACKEND_IMAGE=${BACKEND_URI}:${IMAGE_TAG}" >> $GITHUB_ENV
 
       - name: Build and push frontend Docker image
         run: |
-          IMAGE_TAG="${GITHUB_SHA:0:8}"
-          FRONTEND_URI="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_FRONTEND_REPO}"
-          docker build -t "${FRONTEND_URI}:${IMAGE_TAG}" frontend
-          docker push "${FRONTEND_URI}:${IMAGE_TAG}"
-          echo "FRONTEND_IMAGE=${FRONTEND_URI}:${IMAGE_TAG}" >> "$GITHUB_ENV"
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.x'
+          IMAGE_TAG=${GITHUB_SHA::8}
+          FRONTEND_URI=${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_FRONTEND_REPO}
+          docker build -t ${FRONTEND_URI}:${IMAGE_TAG} frontend
+          docker push ${FRONTEND_URI}:${IMAGE_TAG}
+          echo "FRONTEND_IMAGE=${FRONTEND_URI}:${IMAGE_TAG}" >> $GITHUB_ENV
 
       - name: Register new ECS task definitions and update services
         run: |
-          python - <<'PY'
-import json
-import os
-import subprocess
+          python3 <<'PY'
+import json, os, subprocess
 
 def clean_task_def(task_def):
     for key in [
-        'status', 'revision', 'requiresAttributes', 'compatibilities',
-        'requiresCompatibilities', 'registeredAt', 'registeredBy',
+        'status', 'revision', 'requiresAttributes', 'compatibilities', 'registeredAt', 'registeredBy',
         'taskDefinitionArn', 'pendingCount', 'activeCount'
     ]:
         task_def.pop(key, None)
@@ -122,7 +115,8 @@ for config in services:
         'aws', 'ecs', 'update-service',
         '--cluster', cluster,
         '--service', config['service'],
-        '--task-definition', new_task_def_arn
+        '--task-definition', new_task_def_arn,
+        '--force-new-deployment'
     ])
     print(f"Service {config['service']} updated with task definition {new_task_def_arn}")
 PY
