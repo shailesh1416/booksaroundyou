@@ -12,12 +12,9 @@ jobs:
       AWS_REGION: ${{ secrets.AWS_REGION }}
       AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
       ECR_BACKEND_REPO: ${{ secrets.ECR_BACKEND_REPO }}
-      ECR_FRONTEND_REPO: ${{ secrets.ECR_FRONTEND_REPO }}
       ECS_CLUSTER: ${{ secrets.ECS_CLUSTER }}
       ECS_SERVICE_BACKEND: ${{ secrets.ECS_SERVICE_BACKEND }}
-      ECS_SERVICE_FRONTEND: ${{ secrets.ECS_SERVICE_FRONTEND }}
       BACKEND_CONTAINER_NAME: ${{ secrets.BACKEND_CONTAINER_NAME }}
-      FRONTEND_CONTAINER_NAME: ${{ secrets.FRONTEND_CONTAINER_NAME }}
 
     steps:
       - name: Checkout repository
@@ -41,14 +38,6 @@ jobs:
           docker push ${BACKEND_URI}:${IMAGE_TAG}
           echo "BACKEND_IMAGE=${BACKEND_URI}:${IMAGE_TAG}" >> $GITHUB_ENV
 
-      - name: Build and push frontend Docker image
-        run: |
-          IMAGE_TAG=${GITHUB_SHA:0:8}
-          FRONTEND_URI=${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_FRONTEND_REPO}
-          docker build --build-arg REACT_APP_GOOGLE_CLIENT_ID="${{ secrets.REACT_APP_GOOGLE_CLIENT_ID }}"  -t ${FRONTEND_URI}:${IMAGE_TAG} frontend
-          docker push ${FRONTEND_URI}:${IMAGE_TAG}
-          echo "FRONTEND_IMAGE=${FRONTEND_URI}:${IMAGE_TAG}" >> $GITHUB_ENV
-
       - name: Register new ECS task definitions and update services
         run: |
           python3 <<'PYEOF'
@@ -69,12 +58,6 @@ jobs:
                   'service': os.environ['ECS_SERVICE_BACKEND'],
                   'container_name': os.environ['BACKEND_CONTAINER_NAME'],
                   'image': os.environ['BACKEND_IMAGE'],
-              },
-              {
-                  'name': 'frontend',
-                  'service': os.environ['ECS_SERVICE_FRONTEND'],
-                  'container_name': os.environ['FRONTEND_CONTAINER_NAME'],
-                  'image': os.environ['FRONTEND_IMAGE'],
               },
           ]
 

@@ -2,7 +2,7 @@
   "name": "bookaroundme-frontend",
   "version": "0.1.0",
   "private": true,
-  "proxy": "http://16.171.68.65:5000",
+  "proxy": "http://56.228.24.233:5000",
   "dependencies": {
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
