@@ -45,7 +45,7 @@ jobs:
         run: |
           IMAGE_TAG=${GITHUB_SHA:0:8}
           FRONTEND_URI=${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_FRONTEND_REPO}
-          docker build -t ${FRONTEND_URI}:${IMAGE_TAG} frontend
+          docker --build-arg REACT_APP_GOOGLE_CLIENT_ID="${{ secrets.REACT_APP_GOOGLE_CLIENT_ID }}" build -t ${FRONTEND_URI}:${IMAGE_TAG} frontend
           docker push ${FRONTEND_URI}:${IMAGE_TAG}
           echo "FRONTEND_IMAGE=${FRONTEND_URI}:${IMAGE_TAG}" >> $GITHUB_ENV
 
