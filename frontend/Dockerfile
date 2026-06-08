@@ -8,6 +8,8 @@ RUN npm install
 
 # Copy app sources and build
 COPY . .
+ARG REACT_APP_GOOGLE_CLIENT_ID
+ENV REACT_APP_GOOGLE_CLIENT_ID=$REACT_APP_GOOGLE_CLIENT_ID
 RUN npm run build
 
 # Production stage
